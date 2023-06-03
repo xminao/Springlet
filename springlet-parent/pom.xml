@@ -17,6 +17,7 @@
     <junit-version>4.13.2</junit-version>
     <slf4j-version>2.0.6</slf4j-version>
     <logback-version>1.4.6</logback-version>
+    <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.7</maven.compiler.source>
@@ -41,6 +42,12 @@
         <groupId>ch.qos.logback</groupId>
         <artifactId>logback-classic</artifactId>
         <version>${logback-version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>jakarta.annotation</groupId>
+        <artifactId>jakarta.annotation-api</artifactId>
+        <version>${jakarta.annotation.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
