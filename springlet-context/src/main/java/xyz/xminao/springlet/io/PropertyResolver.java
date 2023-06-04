@@ -9,6 +9,8 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
+ * 配置注入支持
+ *
  * 支持类型转换：
  * 值注入@Value支持String, boolean, int, Long等基本类型和包装类型，以及Data等.
  *

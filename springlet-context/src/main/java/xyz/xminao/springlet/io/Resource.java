@@ -1,9 +1,9 @@
 package xyz.xminao.springlet.io;
 
 /**
- * 定义一个资源类，Java 14新特性。
- * @param path 资源路径
- * @param name 资源名
+ * 定义一个表示文件的类。
+ * @param path 文件路径
+ * @param name 文件名
  */
 public record Resource(String path, String name) {
 }

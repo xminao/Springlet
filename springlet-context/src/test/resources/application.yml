@@ -1,0 +1,7 @@
+qcloud:
+  username: root
+  password: JLNNXCFH
+
+alicloud:
+  username: ${qcloud.username}
+  password: hahahah

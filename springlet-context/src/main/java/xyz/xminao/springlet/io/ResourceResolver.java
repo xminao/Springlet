@@ -20,8 +20,7 @@ import java.util.function.Function;
 
 /**
  *
- * 使用上下文类加载器扫描指定包的class文件，包括目录和jar文件。
- *
+ * 在Classpath下搜索所有.class文件，包括子包中的文件
  * Web应用的类加载器是Servlet容器提供的，不在默认的Classpath搜索，而是在/WEB-INF/classes和目录/WEB-INF/lib中搜索
  *
  */
@@ -35,6 +34,7 @@ public class ResourceResolver {
         this.basePackage = basePackage;
     }
 
+    // 扫描出Classpath下的所有文件
     public <R> List<R> scan(Function<Resource, R> mapper) {
         String basePackagePath = this.basePackage.replace(".", "/");
         String path = basePackagePath;
