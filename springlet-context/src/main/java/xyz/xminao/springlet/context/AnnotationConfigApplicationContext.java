@@ -64,6 +64,16 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
                 createBeanAsEarlySingleton(def);
             }
         });
+
+        // 通过字段和setter方法注入依赖（属于弱依赖）
+        this.beans.values().forEach(def -> {
+            // TODO
+        });
+
+        // 调用init方法
+        this.beans.values().forEach(def -> {
+            // TODO
+        });
     }
 
     /**
@@ -377,6 +387,16 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         return (T) def.getRequiredInstance();
     }
 
+    @Nullable
+    @SuppressWarnings("unchecked")
+    protected <T> T findBean(Class<T> requiredType) {
+        BeanDefinition def = findBeanDefinition(requiredType);
+        if (def == null) {
+            return null;
+        }
+        return (T) def.getRequiredInstance();
+    }
+
     @Override
     public void close() {
 
@@ -393,17 +413,152 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     }
 
     /**
+     * 注入但不调用init
+     */
+    void injectBean(BeanDefinition def) {
+        // 获取bean实例，或被代理的原始实例
+        final Object beanInstance = getProxiedInstance(def);
+        try {
+            injectProperties(def, def.getBeanClass(), beanInstance);
+        } catch (ReflectiveOperationException e) {
+            throw new BeanCreationException(e);
+        }
+    }
+
+    /**
+     * 调用init方法
+     */
+    void initBean(BeanDefinition def) {
+        // 获取bean实例，或被代理的原始实例
+        final Object beanInstance = getProxiedInstance(def);
+
+        // 调用init方法
+        callMethod(beanInstance, def.getInitMethod(), def.getInitMethodName());
+
+        // 调用BeanPostProcessor
+    }
+
+    /**
+     * 在当前类以及父类进行字段和方法注入
+     */
+    void injectProperties(BeanDefinition def, Class<?> clazz, Object bean) throws InvocationTargetException, IllegalAccessException {
+        // 在当前类查找Field和Method并注入
+        for (Field f : clazz.getFields()) {
+            tryInjectProperties(def, clazz, bean, f);
+        }
+        for (Method m : clazz.getMethods()) {
+            tryInjectProperties(def, clazz, bean, m);
+        }
+        // 在父类查找Field和Method并注入，利用递归
+        Class<?> superClazz = clazz.getSuperclass();
+        if (superClazz != null) {
+            injectProperties(def, superClazz, bean);
+        }
+    }
+
+    /**
+     * 注入单个属性
+     */
+    void tryInjectProperties(BeanDefinition def, Class<?> clazz, Object bean, AccessibleObject acc) throws IllegalAccessException, InvocationTargetException {
+        // 获取字段/ setter方法上的@Value注解和@Autowired注解
+        Value value = acc.getAnnotation(Value.class);
+        Autowired autowired = acc.getAnnotation(Autowired.class);
+        if (value == null && autowired == null) {
+            return;
+        }
+
+        Field field = null;
+        Method method = null;
+        // 要注入的是字段
+        if (acc instanceof Field f) {
+            checkFieldOrMethod(f);
+            f.setAccessible(true);
+            field = f;
+        }
+        if (acc instanceof Method m) {
+            checkFieldOrMethod(m);
+            // 如果不符合构造方法
+            if (m.getParameters().length != 1) {
+                throw new BeanDefinitionException(
+                        String.format("Cannot inject a non-setter method %s for bean '%s': %s", m.getName(), def.getName(), def.getBeanClass().getName()));
+            }
+            m.setAccessible(true);
+            method = m;
+        }
+
+        String accessibleName = field != null ? field.getName() : method.getName();
+        Class<?> accessiableType = field != null ? field.getType() : method.getParameterTypes()[0];
+
+        if (value != null && autowired != null) {
+            throw new BeanCreationException(String.format("Cannot specify both @Autowired and @Value when inject %s.%s for bean '%s': %s",
+                    clazz.getSimpleName(), accessibleName, def.getName(), def.getBeanClass().getName()));
+        }
+
+        // @Value注入
+        if (value != null) {
+            Object propValue = this.propertyResolver.getRequiredProperty(value.value(), accessiableType);
+            if (field != null) {
+                field.set(bean, propValue);
+            }
+            if (method != null) {
+                method.invoke(bean, propValue);
+            }
+        }
+
+        // @Autowired注入
+        if (autowired != null) {
+            String name = autowired.name();
+            boolean required = autowired.value();
+            Object depends = name.isEmpty() ? findBean(accessiableType) : findBean(name, accessiableType);
+            if (required && depends == null) {
+                throw new UnsatisfiedDependencyException(String.format("Dependency bean not found when inject %s.%s for bean '%s': %s", clazz.getSimpleName(),
+                        accessibleName, def.getName(), def.getBeanClass().getName()));
+            }
+            if (depends != null) {
+                if (field != null) {
+                    field.set(bean, depends);
+                }
+                if (method != null) {
+                    method.invoke(bean, depends);
+                }
+            }
+        }
+    }
+
+    /**
+     * Member是接口，是Field Method Constructor的接口
+     */
+    void checkFieldOrMethod(Member m) {
+        int mod = m.getModifiers();
+        if (Modifier.isStatic(mod)) {
+            throw new BeanDefinitionException("Cannot inject static field: " + m);
+        }
+        if (Modifier.isFinal(mod)) {
+            if (m instanceof Field field) {
+                throw new BeanDefinitionException("Cannot inject final field: " + field);
+            }
+            if (m instanceof Method method) {
+                logger.warn(
+                        "Inject final method should be careful because it is not called on target bean when bean is proxied and may cause NullPointerException.");
+            }
+        }
+    }
+
+
+    /**
      *
      * 创建一个Bean，但不进行字段和方法的注入。如果创建的Bean不是Configuration，则在构造方法 、工厂方法中注入
      */
     @Override
     public Object createBeanAsEarlySingleton(BeanDefinition def) {
+        // 检测重复创建Bean导致的循环依赖
+        // A->B->C->A，创建第二个A的时候就会导致循环依赖创建失败
         if (!this.creatingBeanNames.add(def.getName())) {
-            // 检测重复创建Bean导致的循环依赖
             throw new UnsatisfiedDependencyException(String.format("Circular dependency detected when create bean '%s'", def.getName()));
         }
 
         // 创建方法：构造方法或工厂方法
+        // 如果Bean定义中没有工厂方法就是自定义的Bean，直接构造方法创建，否则就是第三方bean，需要工厂方法创建
         Executable createFn = def.getFactoryName() == null ?
                 def.getConstructor() : def.getFactoryMethod();
 
@@ -495,5 +650,37 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         logger.atDebug().log("create bean instance: {}", def.getName());
         // 返回创建的Bean实例
         return def.getInstance();
+    }
+
+    /**
+     * 获取代理的原始实例
+     */
+    private Object getProxiedInstance(BeanDefinition def) {
+        Object beanInstance = def.getInstance();
+        // 如果Proxy改变了原始Bean，又希望注入原始bean，则由BeanDefinition指定原始bean
+        return beanInstance;
+    }
+
+    /**
+     * 调用方法
+     */
+    private void callMethod(Object beanInstance, Method method, String namedMethod) {
+        // 调用init/destory方法
+        if (method != null) {
+            try {
+                method.invoke(beanInstance);
+            } catch (ReflectiveOperationException e) {
+                throw new BeanCreationException(e);
+            }
+        } else if (namedMethod != null) {
+            // 查找 initMethod/destoryMethod="xyz" 实在实际类型中寻找
+            Method named = ClassUtils.getNamedMethod(beanInstance.getClass(), namedMethod);
+            named.setAccessible(true);
+            try {
+                named.invoke(beanInstance);
+            } catch (ReflectiveOperationException e) {
+                throw new BeanCreationException(e);
+            }
+        }
     }
 }

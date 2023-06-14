@@ -81,6 +81,7 @@ public class PropertyResolver {
     public String getProperty(String key) {
         // 解析${abc.xyz:defaultValue}
         PropertyExpr keyExpr = parsePropertyExpr(key);
+        // 也就是带有 ${} 的
         if (keyExpr != null) {
             // 如果是${...}表达式
             if (keyExpr.defaultValue() != null) {
@@ -92,9 +93,10 @@ public class PropertyResolver {
             }
         }
 
-        // 普通key查询
+        // 普通key查询，也就是没有${}的
         String value = this.properties.get(key);
         if (value != null) {
+            // value可能是嵌套的${}
             return parseValue(value);
         }
         return null;
@@ -144,9 +146,9 @@ public class PropertyResolver {
             return value;
         }
         // 如果是${...}表达式
-        if (expr.defaultValue() != null) {
+        if (expr.defaultValue() != null) { // 有默认值
             return getProperty(expr.key(), expr.defaultValue());
-        } else {
+        } else { // 没有默认值
             return getRequiredProperty(expr.key());
         }
     }
