@@ -30,6 +30,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     Map<String, BeanDefinition> beans;
 
     private Set<String> creatingBeanNames;
+    private List<BeanPostProcessor> beanPostProcessors = new ArrayList<>();
 
     public AnnotationConfigApplicationContext(Class<?> configClass, PropertyResolver propertyResolver) {
         this.propertyResolver = propertyResolver;
@@ -51,6 +52,15 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
                     createBeanAsEarlySingleton(def);
                     return def.getName();
                 }).collect(Collectors.toList());
+
+        // 创建BeanPostProcessor类型的Bean
+        List<BeanPostProcessor> processors = this.beans.values().stream()
+                .filter(this::isBeanPostProcessorDefinition)
+                .sorted()
+                .map(def -> {
+                    return (BeanPostProcessor) createBeanAsEarlySingleton(def);
+                }).toList();
+        this.beanPostProcessors.addAll(processors);
 
         // 创建其他普通bean
         List<BeanDefinition> defs = this.beans.values().stream()
@@ -288,6 +298,10 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         return ClassUtils.findAnnotation(def.getBeanClass(), Configuration.class) != null;
     }
 
+    boolean isBeanPostProcessorDefinition(BeanDefinition def) {
+        return BeanPostProcessor.class.isAssignableFrom(def.getBeanClass());
+    }
+
     /**
      * 获取类、接口、枚举类上的order
      * @Order
@@ -413,7 +427,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
      * 注入但不调用init
      */
     void injectBean(BeanDefinition def) {
-        // 获取bean实例，或被代理的原始实例
+        // 获取bean实例，或被代理的原始实例,BeanPostProcessor功能要用
         final Object beanInstance = getProxiedInstance(def);
         try {
             injectProperties(def, def.getBeanClass(), beanInstance);
@@ -587,6 +601,13 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
                         String.format("Cannot specify @Autowired when create @Configuration bean '%s': %s.", def.getName(), def.getBeanClass().getName()));
             }
 
+            //BeanPostProcessor 不能依赖其他Bean，不可以用@Autowired创建
+            boolean isBeanPostProcessor = isBeanPostProcessorDefinition(def);
+            if (isBeanPostProcessor && autowired != null) {
+                throw new BeanCreationException(
+                        String.format("Cannot specify @Autowired when create BeanPostProcessor '%s': %s.", def.getName(), def.getBeanClass().getName()));
+            }
+
             // 参数需要@Value或@Autowired两者之一，不能同时设置:
             if (value != null && autowired != null) {
                 throw new BeanCreationException(
@@ -650,6 +671,15 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         // 设置BeanDefinition的实例
         def.setInstance(instance);
 
+        // 调用BeanPostProcessor处理Bean
+        for (BeanPostProcessor processor : beanPostProcessors) {
+            Object processed = processor.postProcessBeforeInitialization(def.getInstance(), def.getName());
+            // 如果一个BeanPostProcessor替换了原始Bean，则更新Bean的引用
+            if (def.getInstance() != processed) {
+                def.setInstance(processed);
+            }
+        }
+
         logger.atDebug().log("create bean instance: {}", def.getName());
         // 返回创建的Bean实例
         return def.getInstance();
@@ -661,6 +691,14 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     private Object getProxiedInstance(BeanDefinition def) {
         Object beanInstance = def.getInstance();
         // 如果Proxy改变了原始Bean，又希望注入原始bean，则由BeanDefinition指定原始bean
+        List<BeanPostProcessor> reversedBeanPostProcessors = new ArrayList<>(this.beanPostProcessors);
+        Collections.reverse(reversedBeanPostProcessors);
+        for (BeanPostProcessor beanPostProcessor : reversedBeanPostProcessors) {
+            Object restoredInstance = beanPostProcessor.postProcessOnSetProperty(beanInstance, def.getName());
+            if (restoredInstance != beanInstance) {
+                beanInstance = restoredInstance;
+            }
+        }
         return beanInstance;
     }
 
