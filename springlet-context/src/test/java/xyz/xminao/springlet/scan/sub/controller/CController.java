@@ -5,5 +5,5 @@ import xyz.xminao.springlet.annotation.Component;
 
 @Component
 public class CController {
-    CController() {}
+
 }

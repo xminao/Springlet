@@ -66,14 +66,11 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         });
 
         // 通过字段和setter方法注入依赖（属于弱依赖）
-        this.beans.values().forEach(def -> {
-            // TODO
-        });
+        logger.atDebug().log("beans: {}", beans.values().stream().map(BeanDefinition::getName).toList());
+        this.beans.values().forEach(this::injectBean);
 
         // 调用init方法
-        this.beans.values().forEach(def -> {
-            // TODO
-        });
+        this.beans.values().forEach(this::initBean);
     }
 
     /**
@@ -442,11 +439,11 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
      * 在当前类以及父类进行字段和方法注入
      */
     void injectProperties(BeanDefinition def, Class<?> clazz, Object bean) throws InvocationTargetException, IllegalAccessException {
-        // 在当前类查找Field和Method并注入
-        for (Field f : clazz.getFields()) {
+        // 在当前类遍历查找Field和Method并注入
+        for (Field f : clazz.getDeclaredFields()) {
             tryInjectProperties(def, clazz, bean, f);
         }
-        for (Method m : clazz.getMethods()) {
+        for (Method m : clazz.getDeclaredMethods()) {
             tryInjectProperties(def, clazz, bean, m);
         }
         // 在父类查找Field和Method并注入，利用递归
@@ -467,10 +464,12 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
             return;
         }
 
+        // 获取要注入的字段或者setter方法
         Field field = null;
         Method method = null;
         // 要注入的是字段
         if (acc instanceof Field f) {
+            // 确保可注入
             checkFieldOrMethod(f);
             f.setAccessible(true);
             field = f;
@@ -498,9 +497,11 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         if (value != null) {
             Object propValue = this.propertyResolver.getRequiredProperty(value.value(), accessiableType);
             if (field != null) {
+                logger.atDebug().log("Field injection: {}.{} = {}", def.getBeanClass().getName(), accessibleName, propValue);
                 field.set(bean, propValue);
             }
             if (method != null) {
+                logger.atDebug().log("Method injection: {}.{} ({})", def.getBeanClass().getName(), accessibleName, propValue);
                 method.invoke(bean, propValue);
             }
         }
@@ -516,9 +517,11 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
             }
             if (depends != null) {
                 if (field != null) {
+                    logger.atDebug().log("Field injection: {}.{} = {}", def.getBeanClass().getName(), accessibleName, depends);
                     field.set(bean, depends);
                 }
                 if (method != null) {
+                    logger.atDebug().log("Mield injection: {}.{} ({})", def.getBeanClass().getName(), accessibleName, depends);
                     method.invoke(bean, depends);
                 }
             }
@@ -577,7 +580,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
             Value value = ClassUtils.getAnnotation(paramAnnos, Value.class);
             Autowired autowired = ClassUtils.getAnnotation(paramAnnos, Autowired.class);
 
-            // @Configuration类型的bena是工厂，不能用autowired创建
+            // @Configuration类型的bean是工厂，不能用autowired创建
             boolean isConfiguration = isConfigurationDefinition(def);
             if (isConfiguration && autowired != null) {
                 throw new BeanCreationException(

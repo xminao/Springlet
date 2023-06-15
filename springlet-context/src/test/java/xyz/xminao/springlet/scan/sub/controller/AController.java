@@ -5,6 +5,5 @@ import xyz.xminao.springlet.annotation.Component;
 
 @Component
 public class AController {
-    AController(@Autowired BController b, @Autowired CController c) {
-    }
+
 }
