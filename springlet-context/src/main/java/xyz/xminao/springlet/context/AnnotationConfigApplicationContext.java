@@ -57,9 +57,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         List<BeanPostProcessor> processors = this.beans.values().stream()
                 .filter(this::isBeanPostProcessorDefinition)
                 .sorted()
-                .map(def -> {
-                    return (BeanPostProcessor) createBeanAsEarlySingleton(def);
-                }).toList();
+                .map(def -> (BeanPostProcessor) createBeanAsEarlySingleton(def)).toList();
         this.beanPostProcessors.addAll(processors);
 
         // 创建其他普通bean
@@ -428,6 +426,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
      */
     void injectBean(BeanDefinition def) {
         // 获取bean实例，或被代理的原始实例,BeanPostProcessor功能要用
+        // 不从BeanDefinition中获取实例，因为可能是proxy对象，而是获取原始bean
         final Object beanInstance = getProxiedInstance(def);
         try {
             injectProperties(def, def.getBeanClass(), beanInstance);
@@ -672,7 +671,9 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         def.setInstance(instance);
 
         // 调用BeanPostProcessor处理Bean
+        // 遍历实现beanPostProcessor的Bean列表
         for (BeanPostProcessor processor : beanPostProcessors) {
+            // 为每一个创建的bean实例调用方法
             Object processed = processor.postProcessBeforeInitialization(def.getInstance(), def.getName());
             // 如果一个BeanPostProcessor替换了原始Bean，则更新Bean的引用
             if (def.getInstance() != processed) {
@@ -690,7 +691,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
      */
     private Object getProxiedInstance(BeanDefinition def) {
         Object beanInstance = def.getInstance();
-        // 如果Proxy改变了原始Bean，又希望注入原始bean，则由BeanDefinition指定原始bean
+        // 如果Proxy改变了原始Bean，又希望注入原始bean，则由BeanPostProcessor指定原始bean
         List<BeanPostProcessor> reversedBeanPostProcessors = new ArrayList<>(this.beanPostProcessors);
         Collections.reverse(reversedBeanPostProcessors);
         for (BeanPostProcessor beanPostProcessor : reversedBeanPostProcessors) {

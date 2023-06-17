@@ -16,50 +16,5 @@ import java.util.Map;
  * 返回前保存原始Bean的引用，后序ioc注入依赖要注入到原始bean。
  */
 
-public class AroundProxyBeanPostProcessor implements BeanPostProcessor {
-    // 保存原始Bean，Ioc容器后序需要注入相关依赖和值到原始Bean中
-    Map<String, Object> originBeans = new HashMap<>();
-
-    @Override
-    public Object postProcessBeforeInitialization(Object bean, String beanName) {
-        Class<?> beanClass = bean.getClass();
-        // 检测@Around注解
-        Around anno = beanClass.getAnnotation(Around.class);
-        if (anno != null) {
-            String handlerName;
-            try {
-                handlerName = (String) anno.annotationType().getMethod("value").invoke(anno); // 通过反射获取value值
-            } catch (ReflectiveOperationException e) {
-                throw new AopConfigException(e);
-            }
-            Object proxy = createProxy(beanClass, bean, handlerName);
-            originBeans.put(beanName, bean);
-            return proxy;
-        } else {
-            return bean;
-        }
-    }
-
-    Object createProxy(Class<?> beanClass, Object bean, String handlerName) {
-        ConfigurableApplicationContext ctx = (ConfigurableApplicationContext) ApplicationContextUtils.getRequiredApplicationContext();
-        BeanDefinition def = ctx.findBeanDefinition(handlerName); // 获取拦截器bean
-        if (def == null) {
-            throw new AopConfigException();
-        }
-        Object handlerBean = def.getInstance();
-        if (handlerBean == null) {
-            handlerBean = ctx.createBeanAsEarlySingleton(def);
-        }
-        if (handlerBean instanceof InvocationHandler handler) {
-            return ProxyResolver.getInstance().createProxy(bean, handler);
-        } else {
-            throw new AopConfigException();
-        }
-    }
-
-    @Override
-    public Object postProcessOnSetProperty(Object bean, String beanName) {
-        Object origin = this.originBeans.get(beanName);
-        return origin != null ? origin : bean;
-    }
+public class AroundProxyBeanPostProcessor extends AnnotationProxyBeanPostProcessor<Around> {
 }

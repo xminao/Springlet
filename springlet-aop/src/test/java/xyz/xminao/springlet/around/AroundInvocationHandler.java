@@ -15,6 +15,7 @@ public class AroundInvocationHandler implements InvocationHandler {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         // 拦截标记了@Polite的方法的返回值
         if (method.getAnnotation(Polite.class) != null) {
+            // 获取原始bean的method返回值
             String ret = (String) method.invoke(proxy, args);
             if (ret.endsWith(".")) {
                 ret = ret.substring(0, ret.length() - 1) + "!";
