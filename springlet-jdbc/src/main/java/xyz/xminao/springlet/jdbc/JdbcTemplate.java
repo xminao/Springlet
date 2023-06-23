@@ -8,8 +8,13 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 基于Template模式，以回调作为参数定义模板方法
+ * execute(ConnectionCallback)为基础
+ */
 public class JdbcTemplate {
 
+    // 注入数据源
     final DataSource dataSource;
 
     public JdbcTemplate(DataSource dataSource) {
@@ -17,9 +22,12 @@ public class JdbcTemplate {
     }
 
     public <T> T execute(PreparedStatementCreator psc, PreparedStatementCallback<T> action) {
-        return execute((Connection conn) -> {
-            try (PreparedStatement ps = psc.createPreparedStatement(conn)) {
-                return action.doInPreparedStatement(ps);
+        return execute(new ConnectionCallback<T>() {
+            @Override
+            public T doInConnection(Connection conn) throws SQLException {
+                try (PreparedStatement ps = psc.createPreparedStatement(conn)) {
+                    return action.doInPreparedStatement(ps);
+                }
             }
         });
     }
@@ -128,12 +136,17 @@ public class JdbcTemplate {
         }
     }
 
+    /**
+     * 模板方法，用于数据库连接中执行指定操作
+     */
     public <T> T execute(ConnectionCallback<T> action) {
+        // 获取数据库连接对象
         try (Connection newConn = dataSource.getConnection()) {
             final boolean autoCommit = newConn.getAutoCommit();
             if (!autoCommit) {
                 newConn.setAutoCommit(true);
             }
+            // 调用回调函数完成SQL语句执行
             T result = action.doInConnection(newConn);
             if (!autoCommit) {
                 newConn.setAutoCommit(false);
