@@ -10,6 +10,8 @@
   <modules>
     <module>../springlet-context</module>
       <module>../springlet-aop</module>
+      <module>../springlet-jdbc</module>
+      <module>../springlet-web</module>
   </modules>
   <packaging>pom</packaging>
 
