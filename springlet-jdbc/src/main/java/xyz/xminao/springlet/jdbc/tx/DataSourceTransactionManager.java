@@ -10,12 +10,12 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * 执行开启、提交、回滚事务
+ * 具体执行开启、提交、回滚事务的实现类
  */
 public class DataSourceTransactionManager implements PlatformTransactionManager, InvocationHandler {
 
     static final ThreadLocal<TransactionStatus> transactionStatus = new ThreadLocal<>();
-    final DataSource dataSource;
+    final DataSource dataSource; //拦截器对连接池进行代理
 
     public DataSourceTransactionManager(DataSource dataSource) {
         this.dataSource = dataSource;

@@ -2,6 +2,7 @@ package xyz.xminao.springlet.jdbc;
 
 
 import xyz.xminao.springlet.exception.DataAccessException;
+import xyz.xminao.springlet.jdbc.tx.TransactionalUtils;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -140,6 +141,16 @@ public class JdbcTemplate {
      * 模板方法，用于数据库连接中执行指定操作
      */
     public <T> T execute(ConnectionCallback<T> action) {
+        // 尝试获取当前事务连接，有就使用，实现REQUIRE事务传播模式
+        Connection current = TransactionalUtils.getCurrentConnection();
+        if (current != null) {
+            try {
+                return action.doInConnection(current);
+            } catch (SQLException e) {
+                throw new DataAccessException(e);
+            }
+        }
+        // 没有事务，从连接池获取新连接
         // 获取数据库连接对象
         try (Connection newConn = dataSource.getConnection()) {
             final boolean autoCommit = newConn.getAutoCommit();
