@@ -6,6 +6,7 @@ import java.util.List;
 
 /**
  * ApplicationContext的子接口，支持运行时修改应用程序上下文配置
+ * 框架级使用
  */
 public interface ConfigurableApplicationContext extends ApplicationContext {
 

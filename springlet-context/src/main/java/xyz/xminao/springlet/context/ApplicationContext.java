@@ -4,6 +4,7 @@ import java.util.List;
 
 /**
  * 核心接口，用于表示应用程序上下文
+ * 用户使用
  * 在Spring中继承自BeanFactory，二者都是Ioc容器，但是ApplicationContext启动时就加载Bean，BeanFactory用到时才加载
  * Application包含BeanFactory所有功能并进行了拓展
  */

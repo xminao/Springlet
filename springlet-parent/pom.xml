@@ -12,6 +12,7 @@
       <module>../springlet-aop</module>
       <module>../springlet-jdbc</module>
       <module>../springlet-web</module>
+      <module>../springlet-boot</module>
   </modules>
   <packaging>pom</packaging>
 

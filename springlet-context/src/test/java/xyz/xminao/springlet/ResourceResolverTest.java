@@ -4,6 +4,11 @@ import org.junit.Test;
 import xyz.xminao.springlet.io.Resource;
 import xyz.xminao.springlet.io.ResourceResolver;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.function.Function;
 
@@ -22,5 +27,16 @@ public class ResourceResolverTest {
             }
         });
         list.forEach(System.out::println);
+    }
+
+    @Test
+    public void uriTest() throws IOException, URISyntaxException {
+        Enumeration<URL> en = getClass().getClassLoader().getResources("");
+        while (en.hasMoreElements()) {
+            URL url = en.nextElement();
+            URI uri = url.toURI();
+            System.out.println(uri);
+        }
+
     }
 }

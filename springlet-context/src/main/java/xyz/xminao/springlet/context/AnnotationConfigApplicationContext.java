@@ -26,7 +26,9 @@ import java.util.stream.Collectors;
 public class AnnotationConfigApplicationContext implements ConfigurableApplicationContext {
     Logger logger = LoggerFactory.getLogger(getClass());
     PropertyResolver propertyResolver;
+
     // Bean只有唯一一个表示名，使用Map存储所有BeanDefinition
+    // 没办法用 <Class, BeanDefinition>是因为Bean声明类型和实例类型不一定相符
     Map<String, BeanDefinition> beans;
 
     private Set<String> creatingBeanNames;
@@ -34,12 +36,15 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
 
     public AnnotationConfigApplicationContext(Class<?> configClass, PropertyResolver propertyResolver) {
         this.propertyResolver = propertyResolver;
-        // 扫描获取所有Bean的Class类型
+
+        // 1. BeanDefinition阶段
+        // 1.1 扫描获取所有Bean的Class类型
         Set<String> beanClassNames = scanForClassNames(configClass);
 
-        // 创建Bean定义
+        // 1.2 创建Bean定义
         this.beans = createBeanDefinitions(beanClassNames);
 
+        // 2. 创建Bean阶段
         // 创建BeanName循环检测依赖关系
         this.creatingBeanNames = new HashSet<>();
 
@@ -87,6 +92,14 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
      */
     @Override
     public List<BeanDefinition> findBeanDefinitions(Class<?> type) {
+//        List<BeanDefinition> defs = new ArrayList<>();
+//        for (BeanDefinition def : this.beans.values()) {
+//            if (type.isAssignableFrom(def.getBeanClass())) {
+//                defs.add(def);
+//            }
+//        }
+//        Collections.sort(defs);
+//        return defs;
         return this.beans.values().stream()
                 .filter(def -> type.isAssignableFrom(def.getBeanClass()))
                 .sorted().collect(Collectors.toList());
@@ -101,69 +114,80 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     @Nullable
     @Override
     public BeanDefinition findBeanDefinition(Class<?> type) {
-        // 查找容器中符合type的bean
+        // 查找符合type的BeanDefinition
         List<BeanDefinition> defs = findBeanDefinitions(type);
+        // 1. 没有符合的，直接返回null
         if (defs.isEmpty()) {
-            // 如果没有符合的，返回null
             return null;
         }
+        // 2. 有一个符合的，直接返回
         if (defs.size() == 1) {
-            // 如果只有一个
             return defs.get(0);
         }
-        // 有多个符合的bean，就返回@Primary标注的那个
+        // 3. 有多个符合的，需要借助@Primary注解
+//        List<BeanDefinition> primaryDefs = new ArrayList<>();
+//        for (BeanDefinition def : defs) {
+//            if (def.isPrimary()) {
+//                primaryDefs.add(def);
+//            }
+//        }
         List<BeanDefinition> primaryDefs = defs.stream()
                 .filter(BeanDefinition::isPrimary).toList();
-        if (primaryDefs.size() == 1) { // @Primary 唯一
+
+        // 3.1 有一个@Primary，直接返回
+        if (primaryDefs.size() == 1) {
             return primaryDefs.get(0);
         }
-        if (primaryDefs.isEmpty()) { // @Primary 不存在
-            throw new NoUniqueBeanDefinitionException(String.format("Multiple bean with type '%s' found, but no @Primary specified.", type.getName()));
-        } else { // @Primary 不唯一
-            throw new NoUniqueBeanDefinitionException(String.format("Multiple bean with type '%s' found, and multiple @Primary specified.", type.getName()));
+        // 3.2 不存在@Primary，抛出异常
+        if (primaryDefs.isEmpty()) {
+            throw new NoUniqueBeanDefinitionException(String.format("存在多个 %s 类型的Bean，但不存在 @Primary Bean定义。", type));
+        } else {
+            throw new NoUniqueBeanDefinitionException(String.format("存在多个 %s 类型的Bean，但不存在唯一的 @Primary Bean定义。", type));
         }
     }
 
     /**
-     * 扫描结果是指定包的所有Class全类名，以及@Import导入的Class全类名
-     */
-    protected Set<String> scanForClassNames(Class<?> configClass) {
-        // 获取@ComponentScan即扫描注解
-        // @ComponentScan支持扫描多个包，其value为数组形式
+     * 扫描指定包下的所有Class，返回Class全类名用于加载创建实例，包括@Import注解定义的Class类名
+     * 1. 获取入口配置的@ComponenntScan注解
+     * 2. 获取注解配置的basePackage，没配置就默认入口配置类所在包
+     * 3. 使用ResourceResolver获取出所有指定包下的Class的全类名
+     * 4. 查找@Import导入的Class配置
+      */
+    protected  Set<String> scanForClassNames(Class<?> configClass) {
+        // 获取入口配置的@ComponentScan注解
         ComponentScan scan = ClassUtils.findAnnotation(configClass, ComponentScan.class);
-        // 获取注解配置的package名字，未配置则默认被@ComponentScan注解的类所在包
+        // 获取注解配置的basePackage，没配置就默认入口配置类所在包
         String[] scanPackages = (scan == null || scan.value().length == 0) ? new String[]{configClass.getPackage().getName()} : scan.value();
 
-        // 符合的Class类名集合
-        Set<String> classNameSet = new HashSet<>();
-        // 依次扫描所有包
+        // 指定包下的所有ClassNames
+        Set<String> classNames = new HashSet<>();
+        // 挨个扫描包
         for (String pkg : scanPackages) {
-            logger.atDebug().log("scan package: {}", pkg);
-            // 扫描一个包
-            var rr = new ResourceResolver(pkg);
-            List<String> classList = rr.scan(res -> {
-                String name = res.name();
-                logger.atDebug().log("name : {}", name);
+            // 使用ResourceResolver获取指定包下的所有Class全类名
+            ResourceResolver rr = new ResourceResolver(pkg);
+            List<String> classList = rr.scan(resource -> {
+                String name = resource.name();
                 if (name.endsWith(".class")) {
-                    // 去除.class后缀，替换斜线为. 得到Class全名，如 xyz.xminao.controller.UserController
+                    // 去除.class后缀，替换 / \ 为.
                     return name.substring(0, name.length() - 6).replace("/", ".").replace("\\", ".");
                 }
+                // 不是.class 结尾
                 return null;
             });
-            // 把扫描的结果添加到Set中
-            classNameSet.addAll(classList);
+            classNames.addAll(classList);
         }
 
-        // 继续查找@Import(abc.class)导入的Class配置(全类名)
-        Import importConfig = configClass.getAnnotation(Import.class);
+        // 加入@Import配置的classNames
+        Import importConfig = ClassUtils.findAnnotation(configClass, Import.class);
         if (importConfig != null) {
-            for (Class<?> importConfigClass : importConfig.value()) {
-                // 获取类名
-                String importClassName = importConfigClass.getName();
-                classNameSet.add(importClassName);
+            for (Class<?> clazz : importConfig.value()) {
+                String className = clazz.getName();
+                classNames.add(className);
             }
         }
-        return classNameSet;
+
+        // 返回扫描到的所有指定包下的class全类名集合
+        return classNames;
     }
 
     /**
@@ -248,19 +272,19 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
                 // 获取Bean的名字，如果@Component的value设置了直接用value，否则用类名的首字母小写new PropertyResolver())
                 String beanName = ClassUtils.getBeanName(clazz);
                 // 使用构造方法创建BeanDefinition
+                // @Component注解的都是自定义的bean，直接构造方法创建，这个阶段不会创建@Bean定义的三方组件
                 var def = new BeanDefinition(beanName, clazz, getSuitableConstructor(clazz), getOrder(clazz), clazz.isAnnotationPresent(Primary.class),
                         null, null,
                         ClassUtils.findAnnotationMethod(clazz, PostConstruct.class),
                         ClassUtils.findAnnotationMethod(clazz, PreDestroy.class));
                 addBeanDefinitions(defs, def);
 
-                // 查找是否有@Configuration，视为Bean工厂
+                // 查找是否有@Configuration，视为Bean工厂，这时候创建@Bean标注的bean
                 Configuration configuration = ClassUtils.findAnnotation(clazz, Configuration.class);
                 if (configuration != null) {
                     // 查找Bean方法
                     scanFactoryMethods(beanName, clazz, defs);
                 }
-
             }
         }
         return defs;

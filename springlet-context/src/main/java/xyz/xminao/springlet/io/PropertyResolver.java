@@ -28,6 +28,7 @@ public class PropertyResolver {
     // 存储class -> Function
     Map<Class<?>, Function<String, Object>> converters = new HashMap<>();
 
+    // 初始化配置
     public PropertyResolver(Properties props) {
         // 存入环境变量
         this.properties.putAll(System.getenv());
@@ -44,7 +45,7 @@ public class PropertyResolver {
             }
         }
 
-        // 注册 converters
+        // 注册 converters,用于类型注入
         converters.put(String.class, s -> s);
         converters.put(boolean.class, Boolean::parseBoolean);
         converters.put(Boolean.class, Boolean::valueOf);
@@ -79,7 +80,7 @@ public class PropertyResolver {
     // 按Key查询配置项
     @Nullable
     public String getProperty(String key) {
-        // 解析${abc.xyz:defaultValue}
+        // 解析key，如${abc.xyz:defaultValue}或普通的 abc.xyz
         PropertyExpr keyExpr = parsePropertyExpr(key);
         // 也就是带有 ${} 的
         if (keyExpr != null) {
@@ -128,6 +129,7 @@ public class PropertyResolver {
         return convert(targetType, value);
     }
 
+    // 获取非空配置，也就是不能带默认值
     public String getRequiredProperty(String key) {
         String value = getProperty(key);
         return Objects.requireNonNull(value, "Property '" + key + "' not found.");

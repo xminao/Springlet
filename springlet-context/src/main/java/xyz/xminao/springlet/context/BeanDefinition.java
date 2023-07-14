@@ -13,28 +13,29 @@ import java.util.Objects;
  */
 public class BeanDefinition implements Comparable<BeanDefinition> {
     // 全局唯一 Bean Name
-    private String name;
+    private final String name;
 
     // Bean 的声明类型
-    private Class<?> beanClass;
+    // 这里要注意声明类型和实例类型可能不一致，比如@Bean工程方法得到的Bean
+    private final Class<?> beanClass;
 
     // Bean 实例, 只支持单例模式
     private Object instance = null;
 
     // 构造方法，用于自己定义的带@Component注解的Bean实例化
-    private Constructor<?> constructor;
+    private final Constructor<?> constructor;
 
     // 工厂名
-    private String factoryName;
+    private final String factoryName;
 
     // 工厂方法
-    private Method factoryMethod;
+    private final Method factoryMethod;
 
-    // Bean 顺序
-    private int order;
+    // Bean 顺序,需要重写compareTo方法
+    private final int order;
 
     // 是否主要,即是否标识了@Primary
-    private boolean primary;
+    private final boolean primary;
 
     // autowired and called init method
     private boolean init = false;

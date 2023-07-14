@@ -26,8 +26,11 @@ import java.util.function.Function;
  */
 public class ResourceResolver {
 
+    // 日志
     Logger logger = LoggerFactory.getLogger(getClass());
 
+    // 扫描的包
+    // eg: xyz.xminao
     String basePackage;
 
     public ResourceResolver(String basePackage) {
@@ -37,10 +40,9 @@ public class ResourceResolver {
     // 扫描出Classpath下的所有文件
     public <R> List<R> scan(Function<Resource, R> mapper) {
         String basePackagePath = this.basePackage.replace(".", "/");
-        String path = basePackagePath;
         try {
             List<R> collector = new ArrayList<>();
-            scan0(basePackagePath, path, collector, mapper);
+            scan0(basePackagePath, basePackagePath, collector, mapper);
             return collector;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -58,7 +60,9 @@ public class ResourceResolver {
             URL url = en.nextElement();
             URI uri = url.toURI();
             String uriStr = removeTrailingSlash(uri.toString());
+            logger.atDebug().log("uriStr" + uriStr);
             String uriBaseStr = uriStr.substring(0, uriStr.length() - basePackagePath.length());
+            logger.atDebug().log("uriBaseStr:" + uriBaseStr);
             if (uriBaseStr.startsWith("file:")) {
                 // 在目录中搜索
                 uriBaseStr = uriBaseStr.substring(5);
@@ -72,11 +76,18 @@ public class ResourceResolver {
         }
     }
 
-    // 类加载器
+    /**
+     * 获取类加载器，用于扫描出ClassPath的所有文件
+     * 首先从Thrad.getContextClassLoader获取，因为Web应用的ClassLoader不是JVM提供的基于ClassPath的
+     * 而是Servlet容器提供的ClassLoader，不在默认的ClassPath中寻找，会在/WEB-INF/classes和/WEB-INF/lib
+     * 中寻找
+     */
     ClassLoader getContextClassLoader() {
         ClassLoader cl = null;
+        // 先判断是不是Servlet提供的ClassLoader
         cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
+            // 不是Servlet提供的，就是JVM基于Classpath提供的
             cl = getClass().getClassLoader();
         }
         return cl;
