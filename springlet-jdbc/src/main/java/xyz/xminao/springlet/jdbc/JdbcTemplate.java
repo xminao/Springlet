@@ -26,6 +26,7 @@ public class JdbcTemplate {
         return execute(new ConnectionCallback<T>() {
             @Override
             public T doInConnection(Connection conn) throws SQLException {
+                // 从psc获取对象，psc通过conn获取对象
                 try (PreparedStatement ps = psc.createPreparedStatement(conn)) {
                     return action.doInPreparedStatement(ps);
                 }
@@ -139,6 +140,7 @@ public class JdbcTemplate {
 
     /**
      * 模板方法，用于数据库连接中执行指定操作
+     * 以回调为参数
      */
     public <T> T execute(ConnectionCallback<T> action) {
         // 尝试获取当前事务连接，有就使用，实现REQUIRE事务传播模式
@@ -151,6 +153,7 @@ public class JdbcTemplate {
             }
         }
         // 没有事务，从连接池获取新连接
+        // 也就是JdbcTemplate处理获取连接，释放连接，捕获异常，上层代码使用Connection
         // 获取数据库连接对象
         try (Connection newConn = dataSource.getConnection()) {
             final boolean autoCommit = newConn.getAutoCommit();
