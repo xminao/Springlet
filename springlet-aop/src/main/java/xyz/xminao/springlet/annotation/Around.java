@@ -7,5 +7,6 @@ import java.lang.annotation.*;
 @Inherited
 @Documented
 public @interface Around {
+    // 拦截器bean的名字，用于创建代理时通过容器寻找拦截器bean实例
     String value();
 }

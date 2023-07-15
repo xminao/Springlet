@@ -447,6 +447,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
 
     /**
      * 注入但不调用init
+     * 通过BeanDefinition对Bean进行注入
      */
     void injectBean(BeanDefinition def) {
         // 获取bean实例，或被代理的原始实例,BeanPostProcessor功能要用
@@ -473,7 +474,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     }
 
     /**
-     * 在当前类以及父类进行字段和方法注入
+     * 在当前Bean实例以及父类进行字段和方法注入
      */
     void injectProperties(BeanDefinition def, Class<?> clazz, Object bean) throws InvocationTargetException, IllegalAccessException {
         // 在当前类遍历查找Field和Method并注入
@@ -491,7 +492,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     }
 
     /**
-     * 注入单个属性
+     * 注入单个属性,用于弱注入
      */
     void tryInjectProperties(BeanDefinition def, Class<?> clazz, Object bean, AccessibleObject acc) throws IllegalAccessException, InvocationTargetException {
         // 获取字段/ setter方法上的@Value注解和@Autowired注解
@@ -513,7 +514,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
         }
         if (acc instanceof Method m) {
             checkFieldOrMethod(m);
-            // 如果不符合构造方法
+            // 如果不符合setter方法
             if (m.getParameters().length != 1) {
                 throw new BeanDefinitionException(
                         String.format("Cannot inject a non-setter method %s for bean '%s': %s", m.getName(), def.getName(), def.getBeanClass().getName()));
@@ -522,6 +523,7 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
             method = m;
         }
 
+        // 获取要注入的方法/字段的名字以及对应要注入的Bean类型
         String accessibleName = field != null ? field.getName() : method.getName();
         Class<?> accessiableType = field != null ? field.getType() : method.getParameterTypes()[0];
 
@@ -728,9 +730,10 @@ public class AnnotationConfigApplicationContext implements ConfigurableApplicati
     }
 
     /**
-     * 调用方法
+     * 调用方法，用于init/destory方法
      */
     private void callMethod(Object beanInstance, Method method, String namedMethod) {
+        // 如果是@Component的Bean，直接调用方法；如果是@Bean工厂创建的Bean，需要通过方法名反射获得方法
         // 调用init/destory方法
         if (method != null) {
             try {

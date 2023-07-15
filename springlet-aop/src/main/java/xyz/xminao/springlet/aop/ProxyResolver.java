@@ -13,8 +13,10 @@ import java.lang.reflect.Method;
 public class ProxyResolver {
     final Logger logger = LoggerFactory.getLogger(getClass());
 
+    // 用于运行期动态织入字节码，替换CGLIB
     final ByteBuddy byteBuddy = new ByteBuddy();
 
+    // 单例模式
     private static ProxyResolver INSTANCE = null;
 
     public static ProxyResolver getInstance() {
@@ -39,10 +41,13 @@ public class ProxyResolver {
         Class<?> targetClass = bean.getClass();
         logger.atDebug().log("create proxy for bean {} @{}", targetClass.getName(), Integer.toHexString(bean.hashCode()));
         Class<?> proxyClass = this.byteBuddy
-                // subclass with default empty constructor:
+                // 创建一个指定类targetClass的子类，也就是指定一个基类
                 .subclass(targetClass, ConstructorStrategy.Default.DEFAULT_CONSTRUCTOR)
-                // intercept methods:
-                .method(ElementMatchers.isPublic()).intercept(InvocationHandlerAdapter.of(
+                // 要拦截方法的拦截条件，这里指定了所有public方法
+                .method(ElementMatchers.isPublic())
+                // 指定要拦截到的方法要修改成什么样子，拦截设置返回值
+                .intercept(InvocationHandlerAdapter.of(
+                        // 这里创建一个新的拦截器实例，实现使用Java自带的InvocationHandler作为ByteBuddy的拦截器
                         // proxy method invoke:
                         // proxy是Proxy实例
                         (proxy, method, args) -> {
@@ -51,7 +56,9 @@ public class ProxyResolver {
                             return handler.invoke(bean, method, args);
                         }))
                 // generate proxy class:
-                .make().load(targetClass.getClassLoader()).getLoaded();
+                .make()
+                // 加载字节码
+                .load(targetClass.getClassLoader()).getLoaded();
         Object proxy;
         try {
             proxy = proxyClass.getConstructor().newInstance();

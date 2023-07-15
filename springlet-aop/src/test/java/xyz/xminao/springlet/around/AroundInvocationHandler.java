@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 @Component
 public class AroundInvocationHandler implements InvocationHandler {
 
+    // 自定义一个拦截器，proxy为代理类的实例
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         // 拦截标记了@Polite的方法的返回值

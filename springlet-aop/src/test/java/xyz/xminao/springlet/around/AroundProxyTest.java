@@ -3,6 +3,8 @@ package xyz.xminao.springlet.around;
 import org.junit.jupiter.api.Test;
 import xyz.xminao.springlet.aop.ProxyResolver;
 
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class AroundProxyTest {
@@ -16,9 +18,11 @@ public class AroundProxyTest {
         // 创建Proxy
         OriginBean proxy = new ProxyResolver().createProxy(origin, new AroundInvocationHandler());
 
+        System.out.println(origin.getClass().getName());
         // Proxy类名
         System.out.println(proxy.getClass().getName());
-
+        System.out.println(proxy.hello());
+        Arrays.stream(proxy.getClass().getMethods()).toList().forEach(System.out::println);
         // Proxy类与originbean.class
         assertNotSame(OriginBean.class, proxy.getClass());
 
