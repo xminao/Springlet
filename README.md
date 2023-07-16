@@ -42,6 +42,8 @@
 
 ​	本框架内置了一个@Around注解和AroundProxyBeanPostProcessor来实现AOP，用户使用AOP功能需要自己提供一个带@Around注解的Bean和一个实现JDK拦截器InvocationHandler的Bean。
 
+> 💡 因为CGLib已经停止维护，所以使用ByteBuddy
+
 
 
 ### JdbcTemplate 📑
